@@ -1,0 +1,10 @@
+streamlit
+pandas
+openpyxl
+numpy
+math
+css
+os
+scikit-learn
+javascript
+
