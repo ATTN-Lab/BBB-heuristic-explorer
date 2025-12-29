@@ -202,7 +202,7 @@ def bbb_penetration_probability_with_mpo(
         return 0.0, info
 
     # Binding score = sum(w * 2p)
-    score_bind = sum(c["w"] * c["2p"] for c in contribs)
+    score_bind = sum(c["w"] * 2 * c["p"] for c in contribs)
 
     # MPO gain relative to baseline 3.0
     score_mpo = c_mpo * (mpo_scaled - 3.0)
