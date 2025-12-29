@@ -101,59 +101,44 @@ def _canon(name: str) -> str:
 @st.cache_data(show_spinner=False)
 def load_bbb_weights(filepath_or_buffer):
     """
-    Reads the BBB weights XLSX and returns:
-      - weights: dict {Protein: Weight}
-      - categories: dict {Protein: CategoryLowerOrEmpty}
-      - efflux: set of proteins treated as efflux
-      - proteins_sorted: list of canonical proteins (sorted)
-    Expects columns: Protein, Weight, Category (Category optional)
+    Reads the BBB weights table and returns:
+      - weights: dict[str, int]
+      - categories: dict[str, str] (normalized category)
+      - efflux: set[str] (canonical proteins categorized as efflux)
+      - proteins: list[str] (canonical proteins for dropdown)
     """
     df = pd.read_excel(filepath_or_buffer)
     df.columns = [c.strip() for c in df.columns]
 
-    # Normalize column names a bit
-    # Allow e.g. "protein" / "Protein", "weight" / "Weight"
-    colmap = {c.lower(): c for c in df.columns}
-    if "protein" not in colmap or "weight" not in colmap:
-        raise ValueError(
-            f"Excel must contain columns 'Protein' and 'Weight'. Found: {list(df.columns)}"
-        )
+    # Normalize expected columns
+    # You said your sheet has Protein, Weight, Category
+    required = {"Protein", "Weight", "Category"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Missing required column(s): {sorted(missing)}")
 
-    protein_col = colmap["protein"]
-    weight_col = colmap["weight"]
-    cat_col = colmap.get("category", None)
+    df["Protein"] = df["Protein"].astype(str).str.strip()
+    df["Category"] = df["Category"].astype(str).str.strip().str.lower()
+    df["Weight"] = pd.to_numeric(df["Weight"], errors="coerce")
 
-    # Build weights
-    df2 = df[[protein_col, weight_col] + ([cat_col] if cat_col else [])].copy()
-    df2[protein_col] = df2[protein_col].astype(str)
-    df2 = df2.dropna(subset=[protein_col, weight_col])
+    df = df.dropna(subset=["Protein", "Weight", "Category"])
 
     weights = {}
     categories = {}
-    efflux_from_sheet = set()
 
-    for _, row in df2.iterrows():
-        pname = _canon(str(row[protein_col]))
-        try:
-            w = float(row[weight_col])
-        except Exception:
-            continue
+    for _, row in df.iterrows():
+        p = _canon(row["Protein"])
+        w = int(row["Weight"])
+        cat = str(row["Category"]).strip().lower()
+        weights[p] = w
+        categories[p] = cat
 
-        weights[pname] = w
+    # Robust efflux detection: "efflux", "efflux protein", etc.
+    efflux = {p for p, cat in categories.items() if "efflux" in cat}
 
-        if cat_col:
-            cat = str(row.get(cat_col, "")).strip().lower()
-            categories[pname] = cat
-            if cat == "efflux" or w == 0:
-                efflux_from_sheet.add(pname)
-        else:
-            categories[pname] = ""
+    proteins = sorted(weights.keys())
+    return weights, categories, efflux, proteins
 
-    # Any aliases should be included as canonical keys too
-    efflux = set(efflux_from_sheet) | set(_ALIAS.keys())
-
-    proteins_sorted = sorted(weights.keys())
-    return weights, categories, efflux, proteins_sorted
 
 def bbb_penetration_probability_with_mpo(
     bindings: dict,          # {protein: binding_prob in [0,1]}
