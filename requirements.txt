@@ -1,9 +1,6 @@
 streamlit
 pandas
 numpy
-math
-css
-os
-scikit-learn
-javascript
+openpyxl
+
 
